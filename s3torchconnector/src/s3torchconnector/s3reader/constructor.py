@@ -4,7 +4,7 @@
 import logging
 import os
 from functools import partial
-from typing import TYPE_CHECKING, Optional, List, Dict, Union
+from typing import TYPE_CHECKING, Optional, List, Dict, Union, Callable, Any
 from collections import defaultdict
 
 from .s3reader import S3Reader
@@ -27,6 +27,46 @@ if TYPE_CHECKING:
     from torch.distributed.checkpoint.filesystem import _StorageInfo
 
 log = logging.getLogger(__name__)
+
+
+def _create_tqdm_progress(total: int):
+    try:
+        from tqdm.auto import tqdm
+    except ImportError as e:
+        raise ImportError(
+            "enable_progress=True requires tqdm. Install s3torchconnector[dcp]."
+        ) from e
+
+    return tqdm(
+        total=total,
+        desc="Loading DCP checkpoint",
+        unit="B",
+        unit_scale=True,
+        unit_divisor=1024,
+    )
+
+
+def _coalesced_stream_total_bytes(
+    ranges: List[ItemRange],
+    max_gap_size: Union[int, float],
+) -> int:
+    non_empty_ranges = [r for r in ranges if r.end != r.start]
+    if not non_empty_ranges:
+        return 0
+
+    total = 0
+    group_start = non_empty_ranges[0].start
+    group_end = non_empty_ranges[0].end
+
+    for item_range in non_empty_ranges[1:]:
+        if item_range.start - group_end <= max_gap_size:
+            group_end = item_range.end
+        else:
+            total += group_end - group_start
+            group_start = item_range.start
+            group_end = item_range.end
+
+    return total + group_end - group_start
 
 
 class DCPOptimizedConstructor:
@@ -53,13 +93,21 @@ class DCPOptimizedConstructor:
                     -> .distcp:   DCPOptimizedS3Reader(item_ranges) ranges from _item_ranges_by_file
     """
 
-    def __init__(self, max_gap_size: Union[int, float] = DEFAULT_MAX_GAP_SIZE) -> None:
+    def __init__(
+        self,
+        max_gap_size: Union[int, float] = DEFAULT_MAX_GAP_SIZE,
+        enable_progress: bool = False,
+        progress_factory: Optional[Callable[[int], Any]] = None,
+    ) -> None:
 
         if max_gap_size < 0:
             raise ValueError("max_gap_size must be non-negative")
 
         self._item_ranges_by_file: Dict[str, List[ItemRange]] = {}
         self._max_gap_size: Union[int, float] = max_gap_size
+        self._enable_progress = enable_progress
+        self._progress_factory = progress_factory or _create_tqdm_progress
+        self._progress = None
 
     def set_item_ranges_by_file(
         self,
@@ -72,6 +120,7 @@ class DCPOptimizedConstructor:
 
         Note: This replaces any previously stored ranges (intentional for multi-call scenarios).
         """
+        self.close_progress()
 
         if not plan_items:
             # Empty plan: no reads will happen since no-op in FileSystemReader.read_data
@@ -93,6 +142,36 @@ class DCPOptimizedConstructor:
             self._item_ranges_by_file[s3_uri].append(
                 ItemRange(item_md.offset, item_md.offset + item_md.length)
             )
+
+        self._start_progress()
+
+    def enable_progress(
+        self,
+        progress_factory: Optional[Callable[[int], Any]] = None,
+    ) -> None:
+        self._enable_progress = True
+        if progress_factory is not None:
+            self._progress_factory = progress_factory
+
+    def _start_progress(self) -> None:
+        if not self._enable_progress:
+            return
+
+        total = sum(
+            _coalesced_stream_total_bytes(ranges, self._max_gap_size)
+            for ranges in self._item_ranges_by_file.values()
+        )
+        if total > 0:
+            self._progress = self._progress_factory(total)
+
+    def _update_progress(self, byte_count: int) -> None:
+        if self._progress is not None and byte_count > 0:
+            self._progress.update(byte_count)
+
+    def close_progress(self) -> None:
+        if self._progress is not None:
+            self._progress.close()
+            self._progress = None
 
     def __call__(self, bucket: str, key: str, get_object_info, get_stream) -> S3Reader:
         """Match key to corresponding List[ItemRange] in _item_ranges_by_file.
@@ -116,6 +195,9 @@ class DCPOptimizedConstructor:
                 get_object_info=get_object_info,
                 get_stream=get_stream,
                 max_gap_size=self._max_gap_size,
+                progress_callback=(
+                    self._update_progress if self._progress is not None else None
+                ),
             )
 
         # Error for other files; warn users in case they override prepare_local_plan behavior
@@ -199,6 +281,8 @@ class S3ReaderConstructor:
     @staticmethod
     def dcp_optimized(
         max_gap_size: Union[int, float] = DEFAULT_MAX_GAP_SIZE,
+        enable_progress: bool = False,
+        progress_factory: Optional[Callable[[int], Any]] = None,
     ) -> DCPS3ReaderConstructorProtocol:
         """Creates a constructor for DCP-optimized readers for faster checkpoint loading.
 
@@ -215,6 +299,7 @@ class S3ReaderConstructor:
                 - Default: 32MB (``32 * 1024 * 1024``)
                 - Use ``float("inf")`` to coalesce all ranges regardless of gaps
                 - Use 0 to disable coalescing, which creates a new range-based stream for each gap
+            enable_progress: If True, show a tqdm progress bar for DCP checkpoint bytes fetched from S3.
 
         Returns:
             DCPOptimizedConstructorProtocol:
@@ -237,7 +322,11 @@ class S3ReaderConstructor:
             DCP.load(state_dict, storage_reader=storage_reader)
 
         """
-        return DCPOptimizedConstructor(max_gap_size=max_gap_size)
+        return DCPOptimizedConstructor(
+            max_gap_size=max_gap_size,
+            enable_progress=enable_progress,
+            progress_factory=progress_factory,
+        )
 
     @staticmethod
     def default() -> S3ReaderConstructorProtocol:

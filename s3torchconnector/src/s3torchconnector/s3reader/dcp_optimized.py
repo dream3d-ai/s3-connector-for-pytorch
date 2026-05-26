@@ -272,6 +272,7 @@ class DCPOptimizedS3Reader(S3Reader):
         get_object_info: Callable[[], Union[ObjectInfo, HeadObjectResult]],
         get_stream: Callable[[Optional[int], Optional[int]], GetObjectStream],
         max_gap_size: Union[int, float] = DEFAULT_MAX_GAP_SIZE,
+        progress_callback: Optional[Callable[[int], None]] = None,
         # added float type to allow float("inf") / sys.maxsize for max_gap_size
     ):
         if not bucket:
@@ -292,6 +293,7 @@ class DCPOptimizedS3Reader(S3Reader):
         self._get_object_info = get_object_info
         self._get_stream = get_stream
         self._max_gap_size = max_gap_size
+        self._progress_callback = progress_callback
         self._closed = False
 
         # --- Range Processing ---
@@ -384,6 +386,10 @@ class DCPOptimizedS3Reader(S3Reader):
         self._group_start_to_group[items[0].start] = final_group
         groups.append(final_group)
         return groups
+
+    def _record_bytes_fetched(self, byte_count: int) -> None:
+        if self._progress_callback is not None and byte_count > 0:
+            self._progress_callback(byte_count)
 
     def _find_item_for_range(self, start: int, end: int) -> ItemRange:
         """Find which item contains the requested range [start,end), enforcing sequential access.
@@ -559,6 +565,7 @@ class DCPOptimizedS3Reader(S3Reader):
                     f"S3 stream exhausted at position {pos} before reaching item {item.start}-{item.end}"
                 )
 
+            self._record_bytes_fetched(len(chunk))
             chunk_len = len(chunk)
 
             if pos + chunk_len <= item.start:
@@ -615,6 +622,7 @@ class DCPOptimizedS3Reader(S3Reader):
                     f"S3 stream exhausted at position {pos} while reading item {item.start}-{item.end}"
                 )
 
+            self._record_bytes_fetched(len(chunk))
             chunk_len = len(chunk)
 
             if chunk_len <= bytes_left:

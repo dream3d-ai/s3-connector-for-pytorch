@@ -89,8 +89,10 @@ class S3IterableDataset(torch.utils.data.IterableDataset):
 
         Args:
           object_uris(str | Iterable[str]): S3 URI of the object(s) desired.
-          region(str): AWS region of the S3 bucket where the objects are stored.
-          endpoint(str): AWS endpoint of the S3 bucket where the objects are stored.
+          region(str): S3 region or provider-specific signing region used for requests.
+            For S3-compatible object stores, this can be a value such as "auto" or "eu-north1".
+          endpoint(str): Custom S3 endpoint for the bucket where the objects are stored.
+            Prefer endpoint_url for new code.
           endpoint_url(str): Endpoint URL of an S3-compatible object store.
           transform: Optional callable which is used to transform an S3Reader into the desired type.
           s3client_config: Optional S3ClientConfig with parameters for S3 client.
@@ -139,8 +141,10 @@ class S3IterableDataset(torch.utils.data.IterableDataset):
 
         Args:
           s3_uri(str): An S3 URI (prefix) of the object(s) desired. Objects matching the prefix will be included in the returned dataset.
-          region(str): AWS region of the S3 bucket where the objects are stored.
-          endpoint(str): AWS endpoint of the S3 bucket where the objects are stored.
+          region(str): S3 region or provider-specific signing region used for requests.
+            For S3-compatible object stores, this can be a value such as "auto" or "eu-north1".
+          endpoint(str): Custom S3 endpoint for the bucket where the objects are stored.
+            Prefer endpoint_url for new code.
           endpoint_url(str): Endpoint URL of an S3-compatible object store.
           transform: Optional callable which is used to transform an S3Reader into the desired type.
           s3client_config: Optional S3ClientConfig with parameters for S3 client.

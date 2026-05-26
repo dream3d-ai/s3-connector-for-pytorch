@@ -3,6 +3,7 @@
 
 import os
 from unittest.mock import Mock, patch
+import pytest
 from hypothesis import given
 from hypothesis.strategies import composite, integers, lists
 
@@ -40,6 +41,23 @@ def test_s3storage_reader_default_uses_dcp_optimized():
     """Verify S3StorageReader without explicit constructor uses dcp_optimized."""
     reader = S3StorageReader(region=TEST_REGION, path=TEST_PATH)
     assert isinstance(reader._reader_constructor, DCPOptimizedConstructor)
+
+
+def test_s3storage_reader_enable_progress_uses_dcp_optimized_progress():
+    reader = S3StorageReader(region=TEST_REGION, path=TEST_PATH, enable_progress=True)
+
+    assert isinstance(reader._reader_constructor, DCPOptimizedConstructor)
+    assert reader._reader_constructor._enable_progress is True
+
+
+def test_s3storage_reader_enable_progress_rejects_non_dcp_reader():
+    with pytest.raises(ValueError, match="enable_progress requires"):
+        S3StorageReader(
+            region=TEST_REGION,
+            path=TEST_PATH,
+            reader_constructor=S3ReaderConstructor.default(),
+            enable_progress=True,
+        )
 
 
 def test_s3storage_reader_direct_s3_compatible_config():

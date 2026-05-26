@@ -20,9 +20,30 @@ from torch.distributed.checkpoint.planner import ReadItem
 from torch.distributed.checkpoint.metadata import MetadataIndex
 from torch.distributed.checkpoint.filesystem import _StorageInfo
 
-from .test_s3reader_common import TEST_BUCKET, TEST_KEY, MOCK_OBJECT_INFO, MOCK_STREAM
+from .test_s3reader_common import (
+    TEST_BUCKET,
+    TEST_KEY,
+    MOCK_OBJECT_INFO,
+    MOCK_STREAM,
+    create_object_info_getter,
+    create_stream_getter,
+)
 
 TEST_PATH = f"s3://{TEST_BUCKET}/{TEST_KEY}"
+
+
+class RecordingProgress:
+    def __init__(self, total):
+        self.total = total
+        self.updates = []
+        self.closed = False
+
+    def update(self, bytes_count):
+        self.updates.append(bytes_count)
+
+    def close(self):
+        self.closed = True
+
 
 # ---------- basic constructor tests -----------
 
@@ -115,6 +136,51 @@ def test_dcp_optimized_constructor_custom_max_gap_size(max_gap_size):
     s3reader = constructor(TEST_BUCKET, TEST_KEY, MOCK_OBJECT_INFO, MOCK_STREAM)
     assert isinstance(s3reader, DCPOptimizedS3Reader)
     assert s3reader._max_gap_size == max_gap_size
+
+
+def test_dcp_optimized_constructor_progress_tracks_coalesced_total_and_updates():
+    """Progress gets the coalesced range total and updates from reader stream bytes."""
+    progress_instances = []
+
+    def progress_factory(total):
+        progress = RecordingProgress(total)
+        progress_instances.append(progress)
+        return progress
+
+    constructor = S3ReaderConstructor.dcp_optimized(
+        max_gap_size=10,
+        enable_progress=True,
+        progress_factory=progress_factory,
+    )
+    metadata_indices = [MetadataIndex(f"idx{i}") for i in range(2)]
+    read_items = [
+        Mock(spec=ReadItem, storage_index=metadata_indices[i]) for i in range(2)
+    ]
+    storage_data = {
+        metadata_indices[0]: _StorageInfo(
+            relative_path="file.distcp", offset=0, length=3
+        ),
+        metadata_indices[1]: _StorageInfo(
+            relative_path="file.distcp", offset=7, length=3
+        ),
+    }
+
+    constructor.set_item_ranges_by_file(read_items, storage_data, f"s3://{TEST_BUCKET}")
+    s3reader = constructor(
+        TEST_BUCKET,
+        "file.distcp",
+        create_object_info_getter([b"0123456789"]),
+        create_stream_getter([b"0123456789"], chunk_size=4),
+    )
+
+    assert progress_instances[0].total == 10
+    assert s3reader.read(3) == b"012"
+    s3reader.seek(7)
+    assert s3reader.read(3) == b"789"
+    constructor.close_progress()
+
+    assert progress_instances[0].updates == [4, 4, 2]
+    assert progress_instances[0].closed is True
 
 
 @pytest.mark.parametrize(

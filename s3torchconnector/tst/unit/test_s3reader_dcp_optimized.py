@@ -55,6 +55,7 @@ def create_dcp_s3reader(
     stream_data: Optional[List[bytes]] = None,
     max_gap_size: int = DEFAULT_MAX_GAP_SIZE,
     chunk_size: int = 5,
+    progress_callback=None,
 ):
     """Create DCPOptimizedS3Reader with mock stream data"""
     if ranges is None:
@@ -69,6 +70,7 @@ def create_dcp_s3reader(
         create_object_info_getter(stream_data),
         create_stream_getter(stream_data, chunk_size=chunk_size),  # type: ignore
         max_gap_size=max_gap_size,
+        progress_callback=progress_callback,
     )
 
 
@@ -660,6 +662,25 @@ class TestStreamManagement:
 
         with pytest.raises(AssertionError):
             reader._get_stream_for_item(ranges[1])
+
+    def test_progress_callback_counts_stream_bytes_including_coalesced_gaps(self):
+        """Progress tracks bytes consumed from S3 range streams, including coalesced gaps."""
+        updates = []
+        ranges = [ItemRange(0, 3), ItemRange(7, 10)]
+        reader = create_dcp_s3reader(
+            ranges,
+            [b"0123456789"],
+            max_gap_size=10,
+            chunk_size=4,
+            progress_callback=updates.append,
+        )
+
+        reader.seek(0)
+        assert reader.read(3) == b"012"
+        reader.seek(7)
+        assert reader.read(3) == b"789"
+
+        assert updates == [4, 4, 2]
 
 
 class TestReaderIO:

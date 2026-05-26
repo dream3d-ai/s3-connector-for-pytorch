@@ -26,6 +26,18 @@ class S3Checkpoint:
         access_key_id: Optional[str] = None,
         secret_access_key: Optional[str] = None,
     ):
+        """Initialize an S3 checkpoint manager.
+
+        Args:
+            region (str): S3 region or provider-specific signing region used for requests.
+                For S3-compatible object stores, this can be a value such as "auto" or "eu-north1".
+            endpoint (Optional[str]): Custom S3 endpoint. Prefer endpoint_url for new code.
+            endpoint_url (Optional[str]): Endpoint URL of an S3-compatible object store.
+            s3client_config (Optional[S3ClientConfig]): Optional S3ClientConfig with parameters for the
+                S3 client.
+            access_key_id (Optional[str]): Static access key ID for S3 authentication.
+            secret_access_key (Optional[str]): Static secret access key for S3 authentication.
+        """
         self.region = region
         s3client_config = resolve_s3client_config(
             s3client_config,

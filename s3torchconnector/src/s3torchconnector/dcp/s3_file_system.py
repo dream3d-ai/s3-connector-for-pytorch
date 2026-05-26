@@ -33,6 +33,7 @@ from s3torchconnector._s3client import S3Client, resolve_s3client_config
 from s3torchconnector._s3dataset_common import parse_s3_uri
 from ..s3reader import (
     S3ReaderConstructor,
+    DCPOptimizedConstructor,
     S3ReaderConstructorProtocol,
     DCPS3ReaderConstructorProtocol,
 )
@@ -60,7 +61,8 @@ class S3FileSystem(FileSystemBase):
         Initialize S3FileSystem.
 
         Args:
-            region (str): The AWS region for S3.
+            region (str): S3 region or provider-specific signing region used for requests.
+                For S3-compatible object stores, this can be a value such as "auto" or "eu-north1".
             s3_client (Optional[S3Client]): Optional S3Client instance.
             s3client_config (Optional[S3ClientConfig]): Optional S3ClientConfig with parameters for S3 client.
             reader_constructor (Optional[S3ReaderConstructorProtocol]): Optional partial(S3Reader) created using S3ReaderConstructor
@@ -299,7 +301,8 @@ class S3StorageWriter(FileSystemWriter):
         Initialize an S3 writer for distributed checkpointing.
 
         Args:
-            region (str): The AWS region for S3.
+            region (str): S3 region or provider-specific signing region used for requests.
+                For S3-compatible object stores, this can be a value such as "auto" or "eu-north1".
             path (str): The S3 URI to write checkpoints to.
             s3client_config (Optional[S3ClientConfig]): Optional S3ClientConfig with parameters for S3 client.
             prefix_strategy (Optional[S3PrefixStrategyBase]): Optional strategy for generating S3 prefixes to
@@ -370,12 +373,14 @@ class S3StorageReader(FileSystemReader):
         endpoint_url: Optional[str] = None,
         access_key_id: Optional[str] = None,
         secret_access_key: Optional[str] = None,
+        enable_progress: bool = False,
     ) -> None:
         """
         Initialize an S3 reader for distributed checkpointing.
 
         Args:
-            region (str): The AWS region for S3.
+            region (str): S3 region or provider-specific signing region used for requests.
+                For S3-compatible object stores, this can be a value such as "auto" or "eu-north1".
             path (Union[str, os.PathLike]): The S3 path to read checkpoints from.
             s3client_config (Optional[S3ClientConfig]): Optional S3ClientConfig with parameters for S3 client.
             reader_constructor (Optional[S3ReaderConstructorProtocol]): Reader constructor created using
@@ -384,11 +389,24 @@ class S3StorageReader(FileSystemReader):
             endpoint_url (Optional[str]): Endpoint URL of an S3-compatible object store.
             access_key_id (Optional[str]): Static access key ID for S3 authentication.
             secret_access_key (Optional[str]): Static secret access key for S3 authentication.
+            enable_progress (bool): If True, show a tqdm progress bar for bytes fetched by the
+                default DCP-optimized reader. Custom non-DCP readers do not support progress.
         """
         super().__init__(path)
-        self._reader_constructor = (
-            reader_constructor or S3ReaderConstructor.dcp_optimized()
-        )
+        if reader_constructor is None:
+            self._reader_constructor = S3ReaderConstructor.dcp_optimized(
+                enable_progress=enable_progress
+            )
+        elif enable_progress:
+            if not isinstance(reader_constructor, DCPOptimizedConstructor):
+                raise ValueError(
+                    "enable_progress requires the DCP-optimized reader constructor"
+                )
+            reader_constructor.enable_progress()
+            self._reader_constructor = reader_constructor
+        else:
+            self._reader_constructor = reader_constructor
+
         self.fs: S3FileSystem = S3FileSystem(  # type: ignore[assignment] # since we overrode self.fs: FileSystem
             region,
             s3client_config=s3client_config,
@@ -399,6 +417,13 @@ class S3StorageReader(FileSystemReader):
         )
         self.path = self.fs.init_path(path)
         self.sync_files = False
+
+    def read_data(self, plan, planner):
+        try:
+            return super().read_data(plan, planner)
+        finally:
+            if isinstance(self._reader_constructor, DCPOptimizedConstructor):
+                self._reader_constructor.close_progress()
 
     @classmethod
     def validate_checkpoint_id(cls, checkpoint_id: Union[str, os.PathLike]) -> bool:

@@ -62,6 +62,7 @@ lightning-tests = [
 
 dcp = [
     "tenacity",
+    "tqdm",
     "torch >= 2.3, != 2.5.0",
     "importlib_metadata; python_version == '3.9'", # PyTorch 2.7.0+ DCP w/ Python 3.9 requires this module
 ]
