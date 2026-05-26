@@ -3,7 +3,7 @@
 from typing import Optional
 
 from ._s3dataset_common import parse_s3_uri
-from ._s3client import S3Client, S3ClientConfig
+from ._s3client import S3Client, S3ClientConfig, resolve_s3client_config
 from . import S3Reader, S3Writer
 
 
@@ -21,13 +21,21 @@ class S3Checkpoint:
         self,
         region: str,
         endpoint: Optional[str] = None,
+        endpoint_url: Optional[str] = None,
         s3client_config: Optional[S3ClientConfig] = None,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
     ):
         self.region = region
-        self.endpoint = endpoint
-        self._client = S3Client(
-            region, endpoint=endpoint, s3client_config=s3client_config
+        s3client_config = resolve_s3client_config(
+            s3client_config,
+            endpoint=endpoint,
+            endpoint_url=endpoint_url,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
         )
+        self.endpoint = s3client_config.endpoint_url
+        self._client = S3Client(region, s3client_config=s3client_config)
 
     def reader(self, s3_uri: str) -> S3Reader:
         """Creates an S3Reader from a given s3_uri.

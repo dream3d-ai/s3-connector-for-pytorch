@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
 
 [project]
 name = "s3torchbenchmarking"
@@ -8,6 +8,7 @@ version = "0.0.1"
 description = "Tools to run and compare benchmarks against various PyTorch connectors like the s3torchconnector."
 requires-python = ">=3.8,<3.15"
 readme = "README.md"
+license = "BSD-3-Clause"
 dependencies = [
     "s3torchconnector[lightning,dcp]",
     "boto3",
@@ -32,3 +33,21 @@ test = [
 
 [project.scripts]
 s3torch-datagen = "s3torchbenchmarking.datagen:synthesize_dataset"
+
+[tool.uv.sources]
+s3torchconnector = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/s3torchbenchmarking"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"conf" = "s3torchbenchmarking/conf"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/README.md",
+    "/conf",
+    "/src",
+    "/tst",
+    "/pyproject.toml",
+]

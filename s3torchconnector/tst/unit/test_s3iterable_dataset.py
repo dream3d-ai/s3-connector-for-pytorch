@@ -9,7 +9,12 @@ import hypothesis.strategies as st
 from hypothesis import given, assume
 from unittest.mock import patch, MagicMock
 
-from s3torchconnector import S3IterableDataset, S3Reader, S3ReaderConstructor
+from s3torchconnector import (
+    S3ClientConfig,
+    S3IterableDataset,
+    S3Reader,
+    S3ReaderConstructor,
+)
 from s3torchconnector.s3reader import S3ReaderConstructorProtocol
 from s3torchconnector._s3client import MockS3Client
 
@@ -264,6 +269,49 @@ def test_dataset_creation_from_prefix_with_region_and_endpoint():
     )
     assert isinstance(dataset, S3IterableDataset)
     assert dataset.endpoint == TEST_ENDPOINT
+
+
+def test_dataset_creation_from_prefix_with_direct_s3_compatible_config():
+    dataset = S3IterableDataset.from_prefix(
+        S3_PREFIX,
+        region=TEST_REGION,
+        endpoint_url=TEST_ENDPOINT,
+        access_key_id="test-access-key-id",
+        secret_access_key="test-secret-access-key",
+    )
+    assert dataset.endpoint == TEST_ENDPOINT
+    assert dataset._s3client_config.endpoint_url == TEST_ENDPOINT
+    assert dataset._s3client_config.access_key_id == "test-access-key-id"
+    assert dataset._s3client_config.secret_access_key == "test-secret-access-key"
+
+
+def test_dataset_creation_from_objects_direct_args_override_config():
+    dataset = S3IterableDataset.from_objects(
+        [],
+        region=TEST_REGION,
+        endpoint_url=TEST_ENDPOINT,
+        access_key_id="direct-access-key-id",
+        secret_access_key="direct-secret-access-key",
+        s3client_config=S3ClientConfig(
+            endpoint_url="https://config.example.com",
+            access_key_id="config-access-key-id",
+            secret_access_key="config-secret-access-key",
+        ),
+    )
+    assert dataset.endpoint == TEST_ENDPOINT
+    assert dataset._s3client_config.endpoint_url == TEST_ENDPOINT
+    assert dataset._s3client_config.access_key_id == "direct-access-key-id"
+    assert dataset._s3client_config.secret_access_key == "direct-secret-access-key"
+
+
+def test_dataset_creation_endpoint_alias_conflicts_with_endpoint_url():
+    with pytest.raises(ValueError, match="endpoint_url"):
+        S3IterableDataset.from_prefix(
+            S3_PREFIX,
+            region=TEST_REGION,
+            endpoint="https://legacy.example.com",
+            endpoint_url=TEST_ENDPOINT,
+        )
 
 
 def test_from_prefix_seek_no_head(reader_constructor: S3ReaderConstructorProtocol):

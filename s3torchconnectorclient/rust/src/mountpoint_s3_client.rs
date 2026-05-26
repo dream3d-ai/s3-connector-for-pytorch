@@ -4,7 +4,8 @@
  */
 
 use mountpoint_s3_client::config::{
-    AddressingStyle, EndpointConfig, S3ClientAuthConfig, S3ClientConfig,
+    AddressingStyle, CredentialsProvider, CredentialsProviderStaticOptions, EndpointConfig,
+    S3ClientAuthConfig, S3ClientConfig,
 };
 use mountpoint_s3_client::config::{Allocator, Uri};
 use mountpoint_s3_client::types::{GetObjectParams, HeadObjectParams, PutObjectParams};
@@ -13,9 +14,11 @@ use mountpoint_s3_client::{ObjectClient, S3CrtClient};
 use mountpoint_s3_crt_sys::{aws_thread_join_all_managed, aws_thread_set_managed_join_timeout_ns};
 use pyo3::marker::Python;
 use pyo3::types::PyTuple;
-use pyo3::{pyclass, pyfunction, pymethods, Bound, PyErr, PyRef, PyResult, IntoPyObject, IntoPyObjectExt};
-use std::sync::Arc;
+use pyo3::{
+    pyclass, pyfunction, pymethods, Bound, IntoPyObject, IntoPyObjectExt, PyErr, PyRef, PyResult,
+};
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 use crate::exception::python_exception;
 use crate::get_object_stream::GetObjectStream;
@@ -52,6 +55,9 @@ pub struct MountpointS3Client {
     endpoint: Option<String>,
     #[pyo3(get)]
     max_attempts: usize,
+    #[pyo3(get)]
+    access_key_id: Option<String>,
+    secret_access_key: Option<String>,
 }
 
 /// Waits for all managed CRT threads to complete, with a specified timeout.
@@ -99,7 +105,7 @@ pub fn join_all_managed_threads(py: Python<'_>, timeout_secs: f64) -> PyResult<(
 #[pymethods]
 impl MountpointS3Client {
     #[new]
-    #[pyo3(signature = (region, user_agent_prefix="".to_string(), throughput_target_gbps=10.0, part_size=8*1024*1024, profile=None, unsigned=false, endpoint=None, force_path_style=false, max_attempts=10))]
+    #[pyo3(signature = (region, user_agent_prefix="".to_string(), throughput_target_gbps=10.0, part_size=8*1024*1024, profile=None, unsigned=false, endpoint=None, force_path_style=false, max_attempts=10, access_key_id=None, secret_access_key=None))]
     #[allow(clippy::too_many_arguments)]
     pub fn new_s3_client(
         region: String,
@@ -111,6 +117,8 @@ impl MountpointS3Client {
         endpoint: Option<String>,
         force_path_style: bool,
         max_attempts: usize,
+        access_key_id: Option<String>,
+        secret_access_key: Option<String>,
     ) -> PyResult<Self> {
         // TODO: Mountpoint has logic for guessing based on instance type. It may be worth having
         // similar logic if we want to exceed 10Gbps reading for larger instances
@@ -125,7 +133,12 @@ impl MountpointS3Client {
         if force_path_style {
             endpoint_config = endpoint_config.addressing_style(AddressingStyle::Path);
         }
-        let auth_config = auth_config(profile.as_deref(), unsigned);
+        let auth_config = auth_config(
+            profile.as_deref(),
+            unsigned,
+            access_key_id.as_deref(),
+            secret_access_key.as_deref(),
+        )?;
 
         let user_agent_suffix =
             &format!("{}/{}", build_info::PACKAGE_NAME, build_info::FULL_VERSION);
@@ -155,6 +168,8 @@ impl MountpointS3Client {
             max_attempts,
             crt_client,
             endpoint,
+            access_key_id,
+            secret_access_key,
         ))
     }
 
@@ -238,6 +253,8 @@ impl MountpointS3Client {
             slf.endpoint.clone().into_pyobject(py)?.into_any(),
             slf.force_path_style.into_py_any(py)?.bind(py).to_owned(),
             slf.max_attempts.into_pyobject(py)?.into_any(),
+            slf.access_key_id.clone().into_pyobject(py)?.into_any(),
+            slf.secret_access_key.clone().into_pyobject(py)?.into_any(),
         ];
         PyTuple::new(py, state)
     }
@@ -257,6 +274,8 @@ impl MountpointS3Client {
         max_attempts: usize,
         client: Arc<Client>,
         endpoint: Option<String>,
+        access_key_id: Option<String>,
+        secret_access_key: Option<String>,
     ) -> Self
     where
         Client: ObjectClient + Sync + Send + 'static,
@@ -274,16 +293,54 @@ impl MountpointS3Client {
             client: Arc::new(MountpointS3ClientInnerImpl::new(client)),
             user_agent_prefix,
             endpoint,
+            access_key_id,
+            secret_access_key,
         }
     }
 }
 
-fn auth_config(profile: Option<&str>, unsigned: bool) -> S3ClientAuthConfig {
+fn auth_config(
+    profile: Option<&str>,
+    unsigned: bool,
+    access_key_id: Option<&str>,
+    secret_access_key: Option<&str>,
+) -> PyResult<S3ClientAuthConfig> {
+    let has_access_key_id = access_key_id.is_some();
+    let has_secret_access_key = secret_access_key.is_some();
+    let has_static_credentials = has_access_key_id || has_secret_access_key;
+
+    if has_access_key_id != has_secret_access_key {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "access_key_id and secret_access_key must be provided together",
+        ));
+    }
+    if has_static_credentials && profile.is_some() {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "static credentials cannot be combined with profile",
+        ));
+    }
+    if has_static_credentials && unsigned {
+        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+            "static credentials cannot be combined with unsigned=True",
+        ));
+    }
+
     if unsigned {
-        S3ClientAuthConfig::NoSigning
+        Ok(S3ClientAuthConfig::NoSigning)
     } else if let Some(profile_name) = profile {
-        S3ClientAuthConfig::Profile(profile_name.to_string())
+        Ok(S3ClientAuthConfig::Profile(profile_name.to_string()))
+    } else if let (Some(access_key_id), Some(secret_access_key)) =
+        (access_key_id, secret_access_key)
+    {
+        let config = CredentialsProviderStaticOptions {
+            access_key_id,
+            secret_access_key,
+            session_token: None,
+        };
+        let provider = CredentialsProvider::new_static(&Allocator::default(), config)
+            .map_err(python_exception)?;
+        Ok(S3ClientAuthConfig::Provider(provider))
     } else {
-        S3ClientAuthConfig::Default
+        Ok(S3ClientAuthConfig::Default)
     }
 }

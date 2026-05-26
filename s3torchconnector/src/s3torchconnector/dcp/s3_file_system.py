@@ -29,7 +29,7 @@ from torch.distributed.checkpoint.filesystem import (
 from torch.distributed.checkpoint.planner import SavePlan, LoadPlan
 
 
-from s3torchconnector._s3client import S3Client
+from s3torchconnector._s3client import S3Client, resolve_s3client_config
 from s3torchconnector._s3dataset_common import parse_s3_uri
 from ..s3reader import (
     S3ReaderConstructor,
@@ -52,6 +52,9 @@ class S3FileSystem(FileSystemBase):
         s3_client: Optional[S3Client] = None,
         s3client_config: Optional[S3ClientConfig] = None,
         reader_constructor: Optional[S3ReaderConstructorProtocol] = None,
+        endpoint_url: Optional[str] = None,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
     ) -> None:
         """
         Initialize S3FileSystem.
@@ -62,9 +65,18 @@ class S3FileSystem(FileSystemBase):
             s3client_config (Optional[S3ClientConfig]): Optional S3ClientConfig with parameters for S3 client.
             reader_constructor (Optional[S3ReaderConstructorProtocol]): Optional partial(S3Reader) created using S3ReaderConstructor
                 e.g. S3ReaderConstructor.sequential() or S3ReaderConstructor.range_based()
+            endpoint_url (Optional[str]): Endpoint URL of an S3-compatible object store.
+            access_key_id (Optional[str]): Static access key ID for S3 authentication.
+            secret_access_key (Optional[str]): Static secret access key for S3 authentication.
         """
         self._path: Union[str, os.PathLike] = ""
         self._reader_constructor = reader_constructor or S3ReaderConstructor.default()
+        s3client_config = resolve_s3client_config(
+            s3client_config,
+            endpoint_url=endpoint_url,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
+        )
 
         # Get reader type string for user agent
         reader_type_string = S3ReaderConstructor.get_reader_type_string(
@@ -278,6 +290,9 @@ class S3StorageWriter(FileSystemWriter):
         s3client_config: Optional[S3ClientConfig] = None,
         prefix_strategy: Optional[S3PrefixStrategyBase] = None,
         thread_count: int = 1,
+        endpoint_url: Optional[str] = None,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
         **kwargs,
     ) -> None:
         """
@@ -290,6 +305,9 @@ class S3StorageWriter(FileSystemWriter):
             prefix_strategy (Optional[S3PrefixStrategyBase]): Optional strategy for generating S3 prefixes to
                 optimize checkpoint organization and prevent throttling.
             thread_count (int): Number of IO threads to use to write. Defaults to 1 (Pytorch Default)
+            endpoint_url (Optional[str]): Endpoint URL of an S3-compatible object store.
+            access_key_id (Optional[str]): Static access key ID for S3 authentication.
+            secret_access_key (Optional[str]): Static secret access key for S3 authentication.
             kwargs (dict): Keyword arguments to pass to the parent :class:`FileSystemWriter`.
         """
         super().__init__(
@@ -298,7 +316,13 @@ class S3StorageWriter(FileSystemWriter):
             thread_count=thread_count,
             **kwargs,
         )
-        self.fs = S3FileSystem(region, s3client_config=s3client_config)  # type: ignore
+        self.fs = S3FileSystem(  # type: ignore
+            region,
+            s3client_config=s3client_config,
+            endpoint_url=endpoint_url,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
+        )
         self.path = self.fs.init_path(path)
         self.prefix_strategy = prefix_strategy or DefaultPrefixStrategy()
 
@@ -343,6 +367,9 @@ class S3StorageReader(FileSystemReader):
         reader_constructor: Optional[
             Union[S3ReaderConstructorProtocol, DCPS3ReaderConstructorProtocol]
         ] = None,
+        endpoint_url: Optional[str] = None,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
     ) -> None:
         """
         Initialize an S3 reader for distributed checkpointing.
@@ -354,6 +381,9 @@ class S3StorageReader(FileSystemReader):
             reader_constructor (Optional[S3ReaderConstructorProtocol]): Reader constructor created using
                 S3ReaderConstructor. Defaults to ``S3ReaderConstructor.dcp_optimized()`` for best performance.
                 Use ``S3ReaderConstructor.sequential()`` for unsupported/non-DCP access patterns.
+            endpoint_url (Optional[str]): Endpoint URL of an S3-compatible object store.
+            access_key_id (Optional[str]): Static access key ID for S3 authentication.
+            secret_access_key (Optional[str]): Static secret access key for S3 authentication.
         """
         super().__init__(path)
         self._reader_constructor = (
@@ -363,6 +393,9 @@ class S3StorageReader(FileSystemReader):
             region,
             s3client_config=s3client_config,
             reader_constructor=self._reader_constructor,
+            endpoint_url=endpoint_url,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
         )
         self.path = self.fs.init_path(path)
         self.sync_files = False

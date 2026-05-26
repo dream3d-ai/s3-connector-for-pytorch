@@ -143,6 +143,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Set up stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - uses: actions/download-artifact@v8
         with:
           name: ${{ needs.generate_third_party_licenses.outputs.artifact_name }}
@@ -157,8 +160,8 @@ jobs:
       - name: Build wheel
         run: |
           cd ${{ matrix.build_target }}
-          python -m pip install build
-          python -m build --sdist
+          python -m pip install uv
+          uv build --sdist
 
       - uses: actions/upload-artifact@v7
         with:

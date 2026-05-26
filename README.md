@@ -33,6 +33,19 @@ Amazon S3 Connector for PyTorch supports pre-built wheels via Pip only for Linux
 (Note: macOS x86_64 wheel support will be deprecated in a future release, see [#398](https://github.com/awslabs/s3-connector-for-pytorch/issues/398)) 
 For other platforms, see [DEVELOPMENT](https://github.com/awslabs/s3-connector-for-pytorch/blob/main/DEVELOPMENT.md) for build instructions.
 
+### Install from Git with UV
+
+When installing from this repository, install both package subdirectories from the same tag or commit:
+
+```shell
+uv pip install \
+  "s3torchconnectorclient @ git+https://github.com/awslabs/s3-connector-for-pytorch.git@<ref>#subdirectory=s3torchconnectorclient" \
+  "s3torchconnector[dcp,lightning] @ git+https://github.com/awslabs/s3-connector-for-pytorch.git@<ref>#subdirectory=s3torchconnector"
+```
+
+Use a tag or commit SHA for `<ref>`. Installing from Git builds `s3torchconnectorclient` from source, so Rust,
+`clang`, and `cmake` must be available.
+
 ### Configuration
 
 To use `s3torchconnector`, AWS credentials must be provided through one of the following methods:
@@ -41,11 +54,17 @@ To use `s3torchconnector`, AWS credentials must be provided through one of the f
 - **AWS CLI**: Install and configure [`awscli`](https://aws.amazon.com/cli/) and run `aws configure`.
 - **AWS Credential Files**: Set credentials in the AWS credentials profile file on the local system, located at: `~/.aws/credentials` on Unix or macOS.
 - **Environment Variables**: Set the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables.
+- **Direct Configuration**: Pass static credentials through `S3ClientConfig`, e.g. `S3ClientConfig(access_key_id="...", secret_access_key="...")`.
 
 To use a specific AWS profile configured in `~/.aws/config` and `~/.aws/credentials`, you can either:
 
 - Set environment variable `AWS_PROFILE=custom-profile`, or 
 - Pass the profile name to the `S3ClientConfig` object, e.g. `S3ClientConfig(profile="custom-profile")`.
+
+To use an S3-compatible object store, provide its endpoint URL through `S3ClientConfig`, e.g.
+`S3ClientConfig(endpoint_url="https://s3-compatible.example.com", access_key_id="...", secret_access_key="...")`.
+You can also pass these values directly to dataset and checkpoint constructors with `endpoint_url=...`,
+`access_key_id=...`, and `secret_access_key=...`.
 
 For a more detailed configuration guide, see [AWS CLI docs](https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-files.html).
 
@@ -190,6 +209,25 @@ DCP.load(
     storage_reader=s3_storage_reader,
 )
 model.load_state_dict(model_state_dict)
+```
+
+For S3-compatible object stores, pass the connection settings directly:
+
+```py
+s3_storage_writer = S3StorageWriter(
+    region=REGION,
+    path=CHECKPOINT_URI,
+    endpoint_url="https://s3-compatible.example.com",
+    access_key_id="ACCESS_KEY_ID",
+    secret_access_key="SECRET_ACCESS_KEY",
+)
+s3_storage_reader = S3StorageReader(
+    region=REGION,
+    path=CHECKPOINT_URI,
+    endpoint_url="https://s3-compatible.example.com",
+    access_key_id="ACCESS_KEY_ID",
+    secret_access_key="SECRET_ACCESS_KEY",
+)
 ```
 
 ## S3 Prefix Strategies for Distributed Checkpointing
@@ -539,4 +577,3 @@ See [CODE_OF_CONDUCT.md](https://github.com/awslabs/s3-connector-for-pytorch/blo
 ## License
 
 Amazon S3 Connector for PyTorch has a BSD 3-Clause License, as found in the [LICENSE](https://github.com/awslabs/s3-connector-for-pytorch/blob/main/LICENSE) file.
-

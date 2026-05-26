@@ -19,6 +19,7 @@ DEFAULT_USER_AGENT = UserAgent.get_default_prefix()
 TEST_BUCKET = "test-bucket"
 TEST_KEY = "test-key"
 TEST_REGION = "us-east-1"
+TEST_ENDPOINT = "https://s3-compatible.example.com"
 S3_URI = f"s3://{TEST_BUCKET}/{TEST_KEY}"
 
 KiB = 1 << 10
@@ -166,6 +167,45 @@ def test_force_path_style_s3_client():
         s3client_config=S3ClientConfig(force_path_style=True),
     )
     assert s3_client._client.force_path_style is True
+
+
+def test_s3_client_static_credentials():
+    s3_client = S3Client(
+        region=TEST_REGION,
+        s3client_config=S3ClientConfig(
+            access_key_id="test-access-key-id",
+            secret_access_key="test-secret-access-key",
+        ),
+    )
+    assert s3_client._client.access_key_id == "test-access-key-id"
+    assert not hasattr(s3_client._client, "secret_access_key")
+
+
+def test_s3_client_endpoint_url_config():
+    s3_client = S3Client(
+        region=TEST_REGION,
+        s3client_config=S3ClientConfig(endpoint_url=TEST_ENDPOINT),
+    )
+    assert s3_client._client.endpoint == TEST_ENDPOINT
+
+
+def test_s3_client_legacy_endpoint_matches_config_endpoint_url():
+    s3_client = S3Client(
+        region=TEST_REGION,
+        endpoint=TEST_ENDPOINT,
+        s3client_config=S3ClientConfig(endpoint_url=TEST_ENDPOINT),
+    )
+    assert s3_client._client.endpoint == TEST_ENDPOINT
+
+
+def test_s3_client_legacy_endpoint_overrides_config_endpoint_url():
+    s3_client = S3Client(
+        region=TEST_REGION,
+        endpoint="https://legacy.example.com",
+        s3client_config=S3ClientConfig(endpoint_url=TEST_ENDPOINT),
+    )
+    assert s3_client._client.endpoint == "https://legacy.example.com"
+    assert s3_client.s3client_config.endpoint_url == "https://legacy.example.com"
 
 
 def test_s3_client_different_configs():

@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from s3torchconnector import S3MapDataset, S3Reader, S3ReaderConstructor
+from s3torchconnector import S3ClientConfig, S3MapDataset, S3Reader, S3ReaderConstructor
 from s3torchconnector.s3reader import (
     S3ReaderConstructorProtocol,
 )
@@ -266,6 +266,49 @@ def test_dataset_creation_from_prefix_with_region_and_endpoint():
     )
     assert isinstance(dataset, S3MapDataset)
     assert dataset.endpoint == TEST_ENDPOINT
+
+
+def test_dataset_creation_from_prefix_with_direct_s3_compatible_config():
+    dataset = S3MapDataset.from_prefix(
+        S3_PREFIX,
+        region=TEST_REGION,
+        endpoint_url=TEST_ENDPOINT,
+        access_key_id="test-access-key-id",
+        secret_access_key="test-secret-access-key",
+    )
+    assert dataset.endpoint == TEST_ENDPOINT
+    assert dataset._s3client_config.endpoint_url == TEST_ENDPOINT
+    assert dataset._s3client_config.access_key_id == "test-access-key-id"
+    assert dataset._s3client_config.secret_access_key == "test-secret-access-key"
+
+
+def test_dataset_creation_from_objects_direct_args_override_config():
+    dataset = S3MapDataset.from_objects(
+        [],
+        region=TEST_REGION,
+        endpoint_url=TEST_ENDPOINT,
+        access_key_id="direct-access-key-id",
+        secret_access_key="direct-secret-access-key",
+        s3client_config=S3ClientConfig(
+            endpoint_url="https://config.example.com",
+            access_key_id="config-access-key-id",
+            secret_access_key="config-secret-access-key",
+        ),
+    )
+    assert dataset.endpoint == TEST_ENDPOINT
+    assert dataset._s3client_config.endpoint_url == TEST_ENDPOINT
+    assert dataset._s3client_config.access_key_id == "direct-access-key-id"
+    assert dataset._s3client_config.secret_access_key == "direct-secret-access-key"
+
+
+def test_dataset_creation_endpoint_alias_conflicts_with_endpoint_url():
+    with pytest.raises(ValueError, match="endpoint_url"):
+        S3MapDataset.from_prefix(
+            S3_PREFIX,
+            region=TEST_REGION,
+            endpoint="https://legacy.example.com",
+            endpoint_url=TEST_ENDPOINT,
+        )
 
 
 def test_user_agent_includes_dataset_and_reader_type(

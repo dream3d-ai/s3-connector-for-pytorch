@@ -221,12 +221,16 @@ def test_validate_checkpoint_id():
 
 def test_custom_config_file():
     s3client_config = S3ClientConfig(
-        throughput_target_gbps=7, part_size=8000, max_attempts=10
+        throughput_target_gbps=7,
+        part_size=8000,
+        max_attempts=10,
+        endpoint_url="https://s3-compatible.example.com",
     )
     s3fs = S3FileSystem(TEST_REGION, s3client_config=s3client_config)
     assert s3fs._client._s3client_config.throughput_target_gbps == 7
     assert s3fs._client._s3client_config.part_size == 8000
     assert s3fs._client._s3client_config.max_attempts == 10
+    assert s3fs._client._endpoint == "https://s3-compatible.example.com"
 
 
 def test_default_config_file():
@@ -249,6 +253,24 @@ def test_custom_config_file_for_writer_and_reader():
     assert s3fs._client._s3client_config.throughput_target_gbps == 7
     assert s3fs._client._s3client_config.part_size == 8000
     assert s3fs._client._s3client_config.max_attempts == 10
+
+
+def test_direct_s3_compatible_config():
+    s3fs = S3FileSystem(
+        TEST_REGION,
+        endpoint_url="https://direct.example.com",
+        access_key_id="direct-access-key-id",
+        secret_access_key="direct-secret-access-key",
+        s3client_config=S3ClientConfig(
+            endpoint_url="https://config.example.com",
+            access_key_id="config-access-key-id",
+            secret_access_key="config-secret-access-key",
+        ),
+    )
+
+    assert s3fs._client._s3client_config.endpoint_url == "https://direct.example.com"
+    assert s3fs._client._s3client_config.access_key_id == "direct-access-key-id"
+    assert s3fs._client._s3client_config.secret_access_key == "direct-secret-access-key"
 
 
 @pytest.mark.parametrize("checkpoint_id", ["foobar", "s3:///"])

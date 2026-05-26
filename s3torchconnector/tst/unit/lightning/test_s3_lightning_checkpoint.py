@@ -17,6 +17,7 @@ from lightning.fabric.plugins import CheckpointIO
 from lightning.pytorch.plugins import AsyncCheckpointIO
 
 from s3torchconnector._s3client import MockS3Client
+from s3torchconnector import S3ClientConfig
 from s3torchconnector.lightning import S3LightningCheckpoint
 from .._checkpoint_byteorder_patch import (
     byteorders,
@@ -219,6 +220,49 @@ def test_teardown(lightning_checkpoint):
 def test_lightning_checkpoint_creation_with_region_and_endpoint():
     checkpoint = S3LightningCheckpoint(TEST_REGION, endpoint=TEST_ENDPOINT)
     assert isinstance(checkpoint, S3LightningCheckpoint)
+
+
+def test_lightning_checkpoint_creation_with_direct_s3_compatible_config():
+    checkpoint = S3LightningCheckpoint(
+        TEST_REGION,
+        endpoint_url=TEST_ENDPOINT,
+        access_key_id="test-access-key-id",
+        secret_access_key="test-secret-access-key",
+    )
+    assert checkpoint._client.s3client_config.endpoint_url == TEST_ENDPOINT
+    assert checkpoint._client.s3client_config.access_key_id == "test-access-key-id"
+    assert (
+        checkpoint._client.s3client_config.secret_access_key == "test-secret-access-key"
+    )
+
+
+def test_lightning_checkpoint_creation_direct_args_override_config():
+    checkpoint = S3LightningCheckpoint(
+        TEST_REGION,
+        endpoint_url=TEST_ENDPOINT,
+        access_key_id="direct-access-key-id",
+        secret_access_key="direct-secret-access-key",
+        s3client_config=S3ClientConfig(
+            endpoint_url="https://config.example.com",
+            access_key_id="config-access-key-id",
+            secret_access_key="config-secret-access-key",
+        ),
+    )
+    assert checkpoint._client.s3client_config.endpoint_url == TEST_ENDPOINT
+    assert checkpoint._client.s3client_config.access_key_id == "direct-access-key-id"
+    assert (
+        checkpoint._client.s3client_config.secret_access_key
+        == "direct-secret-access-key"
+    )
+
+
+def test_lightning_checkpoint_creation_endpoint_alias_conflicts_with_endpoint_url():
+    with pytest.raises(ValueError, match="endpoint_url"):
+        S3LightningCheckpoint(
+            TEST_REGION,
+            endpoint="https://legacy.example.com",
+            endpoint_url=TEST_ENDPOINT,
+        )
 
 
 def _test_save(

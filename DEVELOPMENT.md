@@ -1,6 +1,6 @@
 # DEVELOPMENT
 
-To develop `s3torchconnector`, you need to have Python, `pip` and `python-venv` installed. 
+To develop `s3torchconnector`, you need to have Python and `uv` installed.
 
 `s3torchconnector` uses `s3torchconnectorclient` as the underlying S3 Connector. `s3torchconnectorclient` is a 
 Python wrapper around MountpointS3Client that uses S3 CRT to optimize performance of S3 read/write.
@@ -8,21 +8,21 @@ Since MountpointS3Client is implemented in Rust, for development and building fr
 `clang`, `cmake` and rust compiler (as detailed below). 
 
 Note: CLI commands for Ubuntu/Debian 
-#### Install Python 3.x and pip
+#### Install Python 3.x, pip, and uv
 ```shell
 sudo apt update
 sudo apt install python3
 sudo apt install python3-pip
+python3 -m pip install uv
 ```
 #### Clone project
 ```shell
   git clone git@github.com:awslabs/s3-connector-for-pytorch.git
 ```
-#### Create a Python virtual environment
+#### Sync the UV workspace
 ```shell
   cd /path/to/your/project
-  python3 -m venv virtual-env
-  source virtual-env/bin/activate
+  uv sync --all-packages
 ```
 #### Install clang (needed to build the client)
 ```shell
@@ -37,15 +37,23 @@ sudo apt install python3-pip
   curl https://sh.rustup.rs -sSf | sh
   source "$HOME/.cargo/env"
 ```
-#### Install project modules in editable mode
+#### Build project modules
 ```shell
-  pip install -e s3torchconnectorclient
-  pip install -e s3torchconnector
+  uv build ./s3torchconnectorclient
+  uv build ./s3torchconnector
+  uv build ./s3torchbenchmarking
 ```
 
 
-When you make changes to the Rust code, you need to run `pip install -e s3torchconnectorclient` before changes will 
-be viewable from Python.
+When you make changes to the Rust code, you need to rebuild or reinstall `s3torchconnectorclient` before changes will
+be viewable from Python. For example, run `uv build ./s3torchconnectorclient`, or run tests through UV so the
+workspace package is rebuilt as needed.
+
+#### Run package commands
+```shell
+  uv run --package s3torchconnectorclient pytest s3torchconnectorclient/python/tst/unit
+  uv run --package s3torchconnector pytest s3torchconnector/tst/unit
+```
 
 
 ### Licensing
@@ -153,6 +161,13 @@ Using S3ClientConfig you can set up the following parameters for the underlying 
 
 * `max_attempts(int)`: Number of retries for retriable errors
 
+* `endpoint_url(str)`: Endpoint URL for an S3-compatible object store.
+
+* `access_key_id(str)`: Static access key ID for S3 authentication.
+
+* `secret_access_key(str)`: Static secret access key for S3 authentication. Must be provided together with
+  `access_key_id`. Static credentials cannot be combined with `profile` or `unsigned=True`.
+
 For example, this can be passed in like: 
 ```py
 from s3torchconnector import S3MapDataset, S3ClientConfig
@@ -172,6 +187,25 @@ s3_lightning_checkpoint = S3LightningCheckpoint(region=REGION, s3client_config=c
 # Disable signing to make requests without AWS credentials
 config = S3ClientConfig(unsigned=True)
 s3_map_dataset = S3MapDataset.from_prefix(DATASET_URI, region=REGION, s3client_config=config)
+
+# Configure an S3-compatible object store directly
+config = S3ClientConfig(
+    endpoint_url="https://s3-compatible.example.com",
+    access_key_id="ACCESS_KEY_ID",
+    secret_access_key="SECRET_ACCESS_KEY",
+    force_path_style=True,
+)
+s3_map_dataset = S3MapDataset.from_prefix(DATASET_URI, region=REGION, s3client_config=config)
+
+# The same S3-compatible settings can also be passed directly to datasets,
+# checkpoints, Lightning checkpoints, and DCP storage readers/writers.
+s3_map_dataset = S3MapDataset.from_prefix(
+    DATASET_URI,
+    region=REGION,
+    endpoint_url="https://s3-compatible.example.com",
+    access_key_id="ACCESS_KEY_ID",
+    secret_access_key="SECRET_ACCESS_KEY",
+)
 ```
 
 **When modifying the default values for these flags, we strongly recommend to run benchmarking to ensure you are not

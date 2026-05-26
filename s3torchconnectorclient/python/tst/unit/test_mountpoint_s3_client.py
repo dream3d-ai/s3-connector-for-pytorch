@@ -294,6 +294,7 @@ def test_mountpoint_client_pickles():
     expected_throughput_target_gbps = 3.5
     expected_force_path_style = True
     expected_max_attempts = 5
+    expected_access_key_id = "test-access-key-id"
 
     client = MountpointS3Client(
         region=expected_region,
@@ -304,6 +305,8 @@ def test_mountpoint_client_pickles():
         unsigned=expected_unsigned,
         force_path_style=expected_force_path_style,
         max_attempts=expected_max_attempts,
+        access_key_id=expected_access_key_id,
+        secret_access_key="test-secret-access-key",
     )
     dumped = pickle.dumps(client)
     loaded = pickle.loads(dumped)
@@ -325,6 +328,42 @@ def test_mountpoint_client_pickles():
         client.force_path_style == loaded.force_path_style == expected_force_path_style
     )
     assert client.max_attempts == loaded.max_attempts == expected_max_attempts
+    assert client.access_key_id == loaded.access_key_id == expected_access_key_id
+    assert not hasattr(client, "secret_access_key")
+    assert not hasattr(loaded, "secret_access_key")
+
+
+def test_mountpoint_client_creation_with_static_credentials():
+    client = MountpointS3Client(
+        region=REGION,
+        access_key_id="test-access-key-id",
+        secret_access_key="test-secret-access-key",
+    )
+    assert isinstance(client, MountpointS3Client)
+    assert client.access_key_id == "test-access-key-id"
+    assert not hasattr(client, "secret_access_key")
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"access_key_id": "test-access-key-id"},
+        {"secret_access_key": "test-secret-access-key"},
+        {
+            "access_key_id": "test-access-key-id",
+            "secret_access_key": "test-secret-access-key",
+            "profile": "test-profile",
+        },
+        {
+            "access_key_id": "test-access-key-id",
+            "secret_access_key": "test-secret-access-key",
+            "unsigned": True,
+        },
+    ],
+)
+def test_mountpoint_client_invalid_static_credentials(kwargs):
+    with pytest.raises(ValueError):
+        MountpointS3Client(region=REGION, **kwargs)
 
 
 @pytest.mark.parametrize(

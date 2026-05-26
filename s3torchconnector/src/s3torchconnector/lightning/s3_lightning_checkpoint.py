@@ -9,7 +9,7 @@ import torch
 
 from lightning.pytorch.plugins.io import CheckpointIO
 
-from .._s3client import S3Client, S3ClientConfig
+from .._s3client import S3Client, S3ClientConfig, resolve_s3client_config
 from .._s3dataset_common import parse_s3_uri
 from .._user_agent import UserAgent
 
@@ -22,14 +22,23 @@ class S3LightningCheckpoint(CheckpointIO):
         region: str,
         s3client_config: Optional[S3ClientConfig] = None,
         endpoint: Optional[str] = None,
+        endpoint_url: Optional[str] = None,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
     ):
         self.region = region
+        s3client_config = resolve_s3client_config(
+            s3client_config,
+            endpoint=endpoint,
+            endpoint_url=endpoint_url,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
+        )
         user_agent = UserAgent(["lightning", lightning.__version__])
         self._client = S3Client(
             region,
             user_agent=user_agent,
             s3client_config=s3client_config,
-            endpoint=endpoint,
         )
 
     def save_checkpoint(

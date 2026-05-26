@@ -7,7 +7,7 @@ import logging
 import torch.utils.data
 from s3torchconnector._s3bucket_key_data import S3BucketKeyData
 
-from ._s3client import S3Client, S3ClientConfig
+from ._s3client import S3Client, S3ClientConfig, resolve_s3client_config
 from . import S3Reader, S3ReaderConstructor
 from .s3reader import S3ReaderConstructorProtocol
 from ._user_agent import UserAgent
@@ -33,15 +33,24 @@ class S3MapDataset(torch.utils.data.Dataset):
         region: str,
         get_dataset_objects: Callable[[S3Client], Iterable[S3BucketKeyData]],
         endpoint: Optional[str] = None,
+        endpoint_url: Optional[str] = None,
         transform: Callable[[S3Reader], Any] = identity,
         s3client_config: Optional[S3ClientConfig] = None,
         reader_constructor: Optional[S3ReaderConstructorProtocol] = None,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
     ):
         self._get_dataset_objects = get_dataset_objects
         self._transform = transform
         self._region = region
-        self._endpoint = endpoint
-        self._s3client_config = s3client_config
+        self._s3client_config = resolve_s3client_config(
+            s3client_config,
+            endpoint=endpoint,
+            endpoint_url=endpoint_url,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
+        )
+        self._endpoint = self._s3client_config.endpoint_url
         self._client = None
         self._bucket_key_pairs: Optional[List[S3BucketKeyData]] = None
         self._reader_constructor = reader_constructor or S3ReaderConstructor.default()
@@ -68,9 +77,12 @@ class S3MapDataset(torch.utils.data.Dataset):
         *,
         region: str,
         endpoint: Optional[str] = None,
+        endpoint_url: Optional[str] = None,
         transform: Callable[[S3Reader], Any] = identity,
         s3client_config: Optional[S3ClientConfig] = None,
         reader_constructor: Optional[S3ReaderConstructorProtocol] = None,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
     ):
         """Returns an instance of S3MapDataset using the S3 URI(s) provided.
 
@@ -78,10 +90,13 @@ class S3MapDataset(torch.utils.data.Dataset):
           object_uris(str | Iterable[str]): S3 URI of the object(s) desired.
           region(str): AWS region of the S3 bucket where the objects are stored.
           endpoint(str): AWS endpoint of the S3 bucket where the objects are stored.
+          endpoint_url(str): Endpoint URL of an S3-compatible object store.
           transform: Optional callable which is used to transform an S3Reader into the desired type.
           s3client_config: Optional S3ClientConfig with parameters for S3 client.
           reader_constructor (Optional[S3ReaderConstructorProtocol]): Optional partial(S3Reader) created using S3ReaderConstructor
             e.g. S3ReaderConstructor.sequential() or S3ReaderConstructor.range_based()
+          access_key_id(str): Static access key ID for S3 authentication.
+          secret_access_key(str): Static secret access key for S3 authentication.
 
         Returns:
             S3MapDataset: A Map-Style dataset created from S3 objects.
@@ -94,9 +109,12 @@ class S3MapDataset(torch.utils.data.Dataset):
             region,
             partial(get_objects_from_uris, object_uris),
             endpoint,
+            endpoint_url=endpoint_url,
             transform=transform,
             s3client_config=s3client_config,
             reader_constructor=reader_constructor,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
         )
 
     @classmethod
@@ -106,9 +124,12 @@ class S3MapDataset(torch.utils.data.Dataset):
         *,
         region: str,
         endpoint: Optional[str] = None,
+        endpoint_url: Optional[str] = None,
         transform: Callable[[S3Reader], Any] = identity,
         s3client_config: Optional[S3ClientConfig] = None,
         reader_constructor: Optional[S3ReaderConstructorProtocol] = None,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
     ):
         """Returns an instance of S3MapDataset using the S3 URI provided.
 
@@ -116,10 +137,13 @@ class S3MapDataset(torch.utils.data.Dataset):
           s3_uri(str): An S3 URI (prefix) of the object(s) desired. Objects matching the prefix will be included in the returned dataset.
           region(str): AWS region of the S3 bucket where the objects are stored.
           endpoint(str): AWS endpoint of the S3 bucket where the objects are stored.
+          endpoint_url(str): Endpoint URL of an S3-compatible object store.
           transform: Optional callable which is used to transform an S3Reader into the desired type.
           s3client_config: Optional S3ClientConfig with parameters for S3 client.
           reader_constructor (Optional[S3ReaderConstructorProtocol]): Optional partial(S3Reader) created using S3ReaderConstructor
             e.g. S3ReaderConstructor.sequential() or S3ReaderConstructor.range_based()
+          access_key_id(str): Static access key ID for S3 authentication.
+          secret_access_key(str): Static secret access key for S3 authentication.
 
         Returns:
             S3MapDataset: A Map-Style dataset created from S3 objects.
@@ -132,9 +156,12 @@ class S3MapDataset(torch.utils.data.Dataset):
             region,
             partial(get_objects_from_prefix, s3_uri),
             endpoint,
+            endpoint_url=endpoint_url,
             transform=transform,
             s3client_config=s3client_config,
             reader_constructor=reader_constructor,
+            access_key_id=access_key_id,
+            secret_access_key=secret_access_key,
         )
 
     def _get_client(self):
@@ -144,7 +171,6 @@ class S3MapDataset(torch.utils.data.Dataset):
             )
             self._client = S3Client(
                 self.region,
-                endpoint=self.endpoint,
                 user_agent=UserAgent(
                     comments=[f"md/dataset#map md/reader_type#{reader_type_string}"]
                 ),

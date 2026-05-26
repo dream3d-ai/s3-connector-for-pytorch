@@ -14,7 +14,8 @@ class MountpointS3Client:
     force_path_style: Optional[bool]
     max_attempts: int
     user_agent_prefix: str
-    endpoint: str
+    endpoint: Optional[str]
+    access_key_id: Optional[str]
 
     def __init__(
         self,
@@ -27,6 +28,8 @@ class MountpointS3Client:
         endpoint: Optional[str] = None,
         force_path_style: Optional[bool] = False,
         max_attempts: int = 10,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
     ): ...
     def get_object(
         self,

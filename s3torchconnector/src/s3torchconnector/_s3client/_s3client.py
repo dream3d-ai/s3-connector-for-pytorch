@@ -12,7 +12,7 @@ from typing import Optional, Any, List
 
 from s3torchconnector import S3Reader, S3Writer, S3ReaderConstructor
 from s3torchconnector.s3reader.protocol import S3ReaderConstructorProtocol
-from .s3client_config import S3ClientConfig
+from .s3client_config import S3ClientConfig, resolve_s3client_config
 
 from s3torchconnectorclient._mountpoint_s3_client import (
     MountpointS3Client,
@@ -33,6 +33,12 @@ _s3client.py
 
 
 log = logging.getLogger(__name__)
+
+
+def _resolve_endpoint(
+    endpoint: Optional[str], s3client_config: S3ClientConfig
+) -> Optional[str]:
+    return endpoint or s3client_config.endpoint_url
 
 
 def _identity(obj: Any) -> Any:
@@ -91,10 +97,12 @@ class S3Client:
         s3client_config: Optional[S3ClientConfig] = None,
     ):
         self._region = region
-        self._endpoint = endpoint
+        self._s3client_config = resolve_s3client_config(
+            s3client_config, endpoint=endpoint
+        )
+        self._endpoint = _resolve_endpoint(endpoint, self._s3client_config)
         user_agent = user_agent or UserAgent()
         self._user_agent_prefix = user_agent.prefix
-        self._s3client_config = s3client_config or S3ClientConfig()
         self._client_pid: Optional[int] = None
         self._native_client: Optional[MountpointS3Client] = None
 
@@ -144,6 +152,8 @@ class S3Client:
             unsigned=self._s3client_config.unsigned,
             force_path_style=self._s3client_config.force_path_style,
             max_attempts=self._s3client_config.max_attempts,
+            access_key_id=self._s3client_config.access_key_id,
+            secret_access_key=self._s3client_config.secret_access_key,
         )
 
     def get_object(

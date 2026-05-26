@@ -1,0 +1,17 @@
+[project]
+name = "s3-connector-for-pytorch-workspace"
+version = "0.0.0"
+requires-python = ">=3.9,<3.13"
+
+[tool.uv]
+package = false
+# Full workspace sync includes benchmarking dependencies such as torchdata,
+# whose pinned version currently provides wheels through CPython 3.12.
+# Published packages keep their own Python support ranges.
+
+[tool.uv.workspace]
+members = [
+    "s3torchconnectorclient",
+    "s3torchconnector",
+    "s3torchbenchmarking",
+]

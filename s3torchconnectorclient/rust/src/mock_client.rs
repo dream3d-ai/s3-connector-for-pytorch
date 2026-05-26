@@ -66,7 +66,7 @@ impl PyMockClient {
             user_agent_prefix,
             unsigned,
             force_path_style,
-            max_attempts
+            max_attempts,
         }
     }
 
@@ -81,6 +81,8 @@ impl PyMockClient {
             self.force_path_style,
             self.max_attempts,
             self.mock_client.clone(),
+            None,
+            None,
             None,
         )
     }
