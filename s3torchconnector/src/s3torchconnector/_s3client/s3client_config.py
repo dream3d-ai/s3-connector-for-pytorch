@@ -12,8 +12,8 @@ class S3ClientConfig:
     throughput_target_gbps(float): Throughput target in Gigabits per second (Gbps) that we are trying to reach.
         10.0 Gbps by default (may change in future).
     part_size(int): Size (bytes) of file parts that will be uploaded/downloaded.
-        Note: for saving checkpoints, the inner client will adjust the part size to meet the service limits.
-        (max number of parts per upload is 10,000, minimum upload part size is 5 MiB).
+        For streaming checkpoint writes, choose a part size large enough that each object stays within the
+        service's multipart part limit (10,000 parts for AWS S3 and many S3-compatible providers).
         Part size must have values between 5MiB and 5GiB.
         8MiB by default (may change in future).
     unsigned(bool): Set to true to disable signing S3 requests.
@@ -61,6 +61,8 @@ def resolve_s3client_config(
     endpoint_url: Optional[str] = None,
     access_key_id: Optional[str] = None,
     secret_access_key: Optional[str] = None,
+    part_size: Optional[int] = None,
+    force_path_style: Optional[bool] = None,
 ) -> S3ClientConfig:
     """Merge direct S3 connection arguments into S3ClientConfig.
 
@@ -94,5 +96,11 @@ def resolve_s3client_config(
             secret_access_key
             if secret_access_key is not None
             else config.secret_access_key
+        ),
+        part_size=part_size if part_size is not None else config.part_size,
+        force_path_style=(
+            force_path_style
+            if force_path_style is not None
+            else config.force_path_style
         ),
     )

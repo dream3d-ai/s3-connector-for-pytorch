@@ -64,7 +64,8 @@ To use a specific AWS profile configured in `~/.aws/config` and `~/.aws/credenti
 To use an S3-compatible object store, provide its endpoint URL through `S3ClientConfig`, e.g.
 `S3ClientConfig(endpoint_url="https://s3-compatible.example.com", access_key_id="...", secret_access_key="...")`.
 You can also pass these values directly to dataset and checkpoint constructors with `endpoint_url=...`,
-`access_key_id=...`, and `secret_access_key=...`.
+`access_key_id=...`, and `secret_access_key=...`. Multipart and addressing settings can also be passed directly with
+`part_size=...` and `force_path_style=...`.
 
 For a more detailed configuration guide, see [AWS CLI docs](https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-files.html).
 
@@ -220,6 +221,10 @@ s3_storage_writer = S3StorageWriter(
     endpoint_url="https://s3-compatible.example.com",
     access_key_id="ACCESS_KEY_ID",
     secret_access_key="SECRET_ACCESS_KEY",
+    # Optional: useful for providers that require path-style addressing or
+    # for large multipart uploads.
+    force_path_style=True,
+    part_size=64 * 1024 * 1024,
 )
 s3_storage_reader = S3StorageReader(
     region=REGION,
@@ -227,8 +232,16 @@ s3_storage_reader = S3StorageReader(
     endpoint_url="https://s3-compatible.example.com",
     access_key_id="ACCESS_KEY_ID",
     secret_access_key="SECRET_ACCESS_KEY",
+    force_path_style=True,
+    part_size=64 * 1024 * 1024,
 )
 ```
+
+For Cloudflare R2, use the R2 signing region (often `"auto"`) and your R2 endpoint URL. R2 enforces multipart upload
+limits including 10,000 parts per object and uniform non-final part sizes; see Cloudflare's
+[multipart upload limits](https://developers.cloudflare.com/r2/objects/multipart-objects/#limitations). The default
+8 MiB part size supports objects up to about 78 GiB before reaching 10,000 parts. For large distributed checkpoints,
+raise `part_size` enough that each `.distcp` object remains below the part limit.
 
 ## S3 Prefix Strategies for Distributed Checkpointing
 

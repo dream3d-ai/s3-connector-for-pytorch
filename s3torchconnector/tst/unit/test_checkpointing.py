@@ -116,6 +116,8 @@ def test_checkpoint_creation_with_direct_s3_compatible_config():
         endpoint_url=TEST_ENDPOINT,
         access_key_id="test-access-key-id",
         secret_access_key="test-secret-access-key",
+        part_size=64 * 1024 * 1024,
+        force_path_style=True,
     )
     assert checkpoint.endpoint == TEST_ENDPOINT
     assert checkpoint._client.s3client_config.endpoint_url == TEST_ENDPOINT
@@ -123,6 +125,8 @@ def test_checkpoint_creation_with_direct_s3_compatible_config():
     assert (
         checkpoint._client.s3client_config.secret_access_key == "test-secret-access-key"
     )
+    assert checkpoint._client.s3client_config.part_size == 64 * 1024 * 1024
+    assert checkpoint._client.s3client_config.force_path_style is True
 
 
 def test_checkpoint_creation_direct_args_override_config():
@@ -131,10 +135,14 @@ def test_checkpoint_creation_direct_args_override_config():
         endpoint_url=TEST_ENDPOINT,
         access_key_id="direct-access-key-id",
         secret_access_key="direct-secret-access-key",
+        part_size=64 * 1024 * 1024,
+        force_path_style=True,
         s3client_config=S3ClientConfig(
             endpoint_url="https://config.example.com",
             access_key_id="config-access-key-id",
             secret_access_key="config-secret-access-key",
+            part_size=16 * 1024 * 1024,
+            force_path_style=False,
         ),
     )
     assert checkpoint.endpoint == TEST_ENDPOINT
@@ -144,6 +152,8 @@ def test_checkpoint_creation_direct_args_override_config():
         checkpoint._client.s3client_config.secret_access_key
         == "direct-secret-access-key"
     )
+    assert checkpoint._client.s3client_config.part_size == 64 * 1024 * 1024
+    assert checkpoint._client.s3client_config.force_path_style is True
 
 
 def test_checkpoint_creation_endpoint_alias_conflicts_with_endpoint_url():

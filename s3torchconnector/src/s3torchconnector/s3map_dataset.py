@@ -39,6 +39,8 @@ class S3MapDataset(torch.utils.data.Dataset):
         reader_constructor: Optional[S3ReaderConstructorProtocol] = None,
         access_key_id: Optional[str] = None,
         secret_access_key: Optional[str] = None,
+        part_size: Optional[int] = None,
+        force_path_style: Optional[bool] = None,
     ):
         self._get_dataset_objects = get_dataset_objects
         self._transform = transform
@@ -49,6 +51,8 @@ class S3MapDataset(torch.utils.data.Dataset):
             endpoint_url=endpoint_url,
             access_key_id=access_key_id,
             secret_access_key=secret_access_key,
+            part_size=part_size,
+            force_path_style=force_path_style,
         )
         self._endpoint = self._s3client_config.endpoint_url
         self._client = None
@@ -83,6 +87,8 @@ class S3MapDataset(torch.utils.data.Dataset):
         reader_constructor: Optional[S3ReaderConstructorProtocol] = None,
         access_key_id: Optional[str] = None,
         secret_access_key: Optional[str] = None,
+        part_size: Optional[int] = None,
+        force_path_style: Optional[bool] = None,
     ):
         """Returns an instance of S3MapDataset using the S3 URI(s) provided.
 
@@ -99,6 +105,8 @@ class S3MapDataset(torch.utils.data.Dataset):
             e.g. S3ReaderConstructor.sequential() or S3ReaderConstructor.range_based()
           access_key_id(str): Static access key ID for S3 authentication.
           secret_access_key(str): Static secret access key for S3 authentication.
+          part_size(int): Multipart upload/download part size in bytes.
+          force_path_style(bool): Whether to force path-style addressing.
 
         Returns:
             S3MapDataset: A Map-Style dataset created from S3 objects.
@@ -117,6 +125,8 @@ class S3MapDataset(torch.utils.data.Dataset):
             reader_constructor=reader_constructor,
             access_key_id=access_key_id,
             secret_access_key=secret_access_key,
+            part_size=part_size,
+            force_path_style=force_path_style,
         )
 
     @classmethod
@@ -132,6 +142,8 @@ class S3MapDataset(torch.utils.data.Dataset):
         reader_constructor: Optional[S3ReaderConstructorProtocol] = None,
         access_key_id: Optional[str] = None,
         secret_access_key: Optional[str] = None,
+        part_size: Optional[int] = None,
+        force_path_style: Optional[bool] = None,
     ):
         """Returns an instance of S3MapDataset using the S3 URI provided.
 
@@ -148,6 +160,8 @@ class S3MapDataset(torch.utils.data.Dataset):
             e.g. S3ReaderConstructor.sequential() or S3ReaderConstructor.range_based()
           access_key_id(str): Static access key ID for S3 authentication.
           secret_access_key(str): Static secret access key for S3 authentication.
+          part_size(int): Multipart upload/download part size in bytes.
+          force_path_style(bool): Whether to force path-style addressing.
 
         Returns:
             S3MapDataset: A Map-Style dataset created from S3 objects.
@@ -166,6 +180,8 @@ class S3MapDataset(torch.utils.data.Dataset):
             reader_constructor=reader_constructor,
             access_key_id=access_key_id,
             secret_access_key=secret_access_key,
+            part_size=part_size,
+            force_path_style=force_path_style,
         )
 
     def _get_client(self):

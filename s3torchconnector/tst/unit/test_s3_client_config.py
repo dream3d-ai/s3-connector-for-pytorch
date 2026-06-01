@@ -51,10 +51,14 @@ def test_resolve_s3client_config_direct_args():
         endpoint_url="https://s3-compatible.example.com",
         access_key_id="test-access-key-id",
         secret_access_key="test-secret-access-key",
+        part_size=64 * MiB,
+        force_path_style=True,
     )
     assert config.endpoint_url == "https://s3-compatible.example.com"
     assert config.access_key_id == "test-access-key-id"
     assert config.secret_access_key == "test-secret-access-key"
+    assert config.part_size == 64 * MiB
+    assert config.force_path_style is True
 
 
 def test_resolve_s3client_config_direct_args_override_config():
@@ -67,10 +71,14 @@ def test_resolve_s3client_config_direct_args_override_config():
         endpoint_url="https://direct.example.com",
         access_key_id="direct-access-key-id",
         secret_access_key="direct-secret-access-key",
+        part_size=64 * MiB,
+        force_path_style=True,
     )
     assert config.endpoint_url == "https://direct.example.com"
     assert config.access_key_id == "direct-access-key-id"
     assert config.secret_access_key == "direct-secret-access-key"
+    assert config.part_size == 64 * MiB
+    assert config.force_path_style is True
 
 
 def test_resolve_s3client_config_endpoint_alias():

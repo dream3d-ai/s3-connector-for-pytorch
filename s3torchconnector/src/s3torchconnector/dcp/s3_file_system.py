@@ -56,6 +56,8 @@ class S3FileSystem(FileSystemBase):
         endpoint_url: Optional[str] = None,
         access_key_id: Optional[str] = None,
         secret_access_key: Optional[str] = None,
+        part_size: Optional[int] = None,
+        force_path_style: Optional[bool] = None,
     ) -> None:
         """
         Initialize S3FileSystem.
@@ -70,6 +72,8 @@ class S3FileSystem(FileSystemBase):
             endpoint_url (Optional[str]): Endpoint URL of an S3-compatible object store.
             access_key_id (Optional[str]): Static access key ID for S3 authentication.
             secret_access_key (Optional[str]): Static secret access key for S3 authentication.
+            part_size (Optional[int]): Multipart upload/download part size in bytes.
+            force_path_style (Optional[bool]): Whether to force path-style addressing.
         """
         self._path: Union[str, os.PathLike] = ""
         self._reader_constructor = reader_constructor or S3ReaderConstructor.default()
@@ -78,6 +82,8 @@ class S3FileSystem(FileSystemBase):
             endpoint_url=endpoint_url,
             access_key_id=access_key_id,
             secret_access_key=secret_access_key,
+            part_size=part_size,
+            force_path_style=force_path_style,
         )
 
         # Get reader type string for user agent
@@ -295,6 +301,8 @@ class S3StorageWriter(FileSystemWriter):
         endpoint_url: Optional[str] = None,
         access_key_id: Optional[str] = None,
         secret_access_key: Optional[str] = None,
+        part_size: Optional[int] = None,
+        force_path_style: Optional[bool] = None,
         **kwargs,
     ) -> None:
         """
@@ -311,6 +319,8 @@ class S3StorageWriter(FileSystemWriter):
             endpoint_url (Optional[str]): Endpoint URL of an S3-compatible object store.
             access_key_id (Optional[str]): Static access key ID for S3 authentication.
             secret_access_key (Optional[str]): Static secret access key for S3 authentication.
+            part_size (Optional[int]): Multipart upload/download part size in bytes.
+            force_path_style (Optional[bool]): Whether to force path-style addressing.
             kwargs (dict): Keyword arguments to pass to the parent :class:`FileSystemWriter`.
         """
         super().__init__(
@@ -325,6 +335,8 @@ class S3StorageWriter(FileSystemWriter):
             endpoint_url=endpoint_url,
             access_key_id=access_key_id,
             secret_access_key=secret_access_key,
+            part_size=part_size,
+            force_path_style=force_path_style,
         )
         self.path = self.fs.init_path(path)
         self.prefix_strategy = prefix_strategy or DefaultPrefixStrategy()
@@ -374,6 +386,8 @@ class S3StorageReader(FileSystemReader):
         access_key_id: Optional[str] = None,
         secret_access_key: Optional[str] = None,
         enable_progress: bool = False,
+        part_size: Optional[int] = None,
+        force_path_style: Optional[bool] = None,
     ) -> None:
         """
         Initialize an S3 reader for distributed checkpointing.
@@ -391,6 +405,8 @@ class S3StorageReader(FileSystemReader):
             secret_access_key (Optional[str]): Static secret access key for S3 authentication.
             enable_progress (bool): If True, show a tqdm progress bar for bytes fetched by the
                 default DCP-optimized reader. Custom non-DCP readers do not support progress.
+            part_size (Optional[int]): Multipart upload/download part size in bytes.
+            force_path_style (Optional[bool]): Whether to force path-style addressing.
         """
         super().__init__(path)
         if reader_constructor is None:
@@ -414,6 +430,8 @@ class S3StorageReader(FileSystemReader):
             endpoint_url=endpoint_url,
             access_key_id=access_key_id,
             secret_access_key=secret_access_key,
+            part_size=part_size,
+            force_path_style=force_path_style,
         )
         self.path = self.fs.init_path(path)
         self.sync_files = False

@@ -31,10 +31,14 @@ def test_s3storage_writer_direct_s3_compatible_config():
         endpoint_url="https://direct.example.com",
         access_key_id="direct-access-key-id",
         secret_access_key="direct-secret-access-key",
+        part_size=64 * 1024 * 1024,
+        force_path_style=True,
         s3client_config=S3ClientConfig(
             endpoint_url="https://config.example.com",
             access_key_id="config-access-key-id",
             secret_access_key="config-secret-access-key",
+            part_size=16 * 1024 * 1024,
+            force_path_style=False,
         ),
     )
 
@@ -46,3 +50,5 @@ def test_s3storage_writer_direct_s3_compatible_config():
         writer.fs._client.s3client_config.secret_access_key
         == "direct-secret-access-key"
     )
+    assert writer.fs._client.s3client_config.part_size == 64 * 1024 * 1024
+    assert writer.fs._client.s3client_config.force_path_style is True

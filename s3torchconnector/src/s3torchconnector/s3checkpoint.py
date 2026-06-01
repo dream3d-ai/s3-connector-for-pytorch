@@ -25,6 +25,8 @@ class S3Checkpoint:
         s3client_config: Optional[S3ClientConfig] = None,
         access_key_id: Optional[str] = None,
         secret_access_key: Optional[str] = None,
+        part_size: Optional[int] = None,
+        force_path_style: Optional[bool] = None,
     ):
         """Initialize an S3 checkpoint manager.
 
@@ -37,6 +39,8 @@ class S3Checkpoint:
                 S3 client.
             access_key_id (Optional[str]): Static access key ID for S3 authentication.
             secret_access_key (Optional[str]): Static secret access key for S3 authentication.
+            part_size (Optional[int]): Multipart upload/download part size in bytes.
+            force_path_style (Optional[bool]): Whether to force path-style addressing.
         """
         self.region = region
         s3client_config = resolve_s3client_config(
@@ -45,6 +49,8 @@ class S3Checkpoint:
             endpoint_url=endpoint_url,
             access_key_id=access_key_id,
             secret_access_key=secret_access_key,
+            part_size=part_size,
+            force_path_style=force_path_style,
         )
         self.endpoint = s3client_config.endpoint_url
         self._client = S3Client(region, s3client_config=s3client_config)

@@ -22,3 +22,27 @@ storage_reader = S3StorageReader(
     reader_constructor=S3ReaderConstructor.default()
 )
 ```
+
+### Cloudflare R2 `InvalidPart` on checkpoint save
+
+Cloudflare R2 has stricter multipart upload constraints than AWS S3: non-final parts must be the same size, and each
+object can have at most 10,000 parts. If a distributed checkpoint save fails during `stream.close()` or
+`CompleteMultipartUpload` with an `InvalidPart` response, increase the connector part size so every `.distcp` object
+uses fewer than 10,000 parts. With the default 8 MiB part size, that limit is about 78 GiB per object.
+
+```py
+from s3torchconnector.dcp import S3StorageWriter
+
+storage_writer = S3StorageWriter(
+    region="auto",
+    path=CHECKPOINT_URI,
+    endpoint_url="https://<account-id>.r2.cloudflarestorage.com",
+    access_key_id="ACCESS_KEY_ID",
+    secret_access_key="SECRET_ACCESS_KEY",
+    force_path_style=True,
+    part_size=64 * 1024 * 1024,
+)
+```
+
+Choose a larger `part_size` for very large checkpoints. For example, 64 MiB supports roughly 625 GiB per `.distcp`
+object before the 10,000-part limit.
