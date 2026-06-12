@@ -1,5 +1,6 @@
 [build-system]
-requires = ["maturin>=1.9,<2"]
+# puccinialin lets maturin bootstrap a Rust toolchain for sdist builds on hosts without Rust
+requires = ["maturin>=1.9,<2", "puccinialin"]
 build-backend = "maturin"
 
 [project]
